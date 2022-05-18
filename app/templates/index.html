@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multimedia text analysis</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.14.1/dist/css/uikit.min.css" />
+
+    <!-- UIkit JS -->
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.14.1/dist/js/uikit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.14.1/dist/js/uikit-icons.min.js"></script>
+</head>
+<body class="uk-height-1-1">
+    <div class="uk-child-width-expand@s uk-text-center uk-height-1-1" uk-grid>
+        <div id="drop-area">
+            <div class="uk-card uk-card-default uk-card-body uk-height-1-1">
+                <textarea 
+                    id="input"
+                    style="height: 83vh" 
+                    class="uk-textarea" 
+                    rows="10" 
+                    placeholder="Insert the text manually here or drop image with text or speech recording here..."
+                ></textarea>
+                <button 
+                    class="uk-button uk-button-secondary uk-button-large uk-margin-small-top uk-width-1-1"
+                    onclick="analyzeText()"
+                >
+                    Submit
+                </button>
+                <input style="display: none" type="file" id="fileElem" onchange="handleFiles(this.files)">
+            </div>
+        </div>
+        <div>
+            <div class="uk-card uk-card-default uk-card-body uk-height-1-1">
+                <div id="placeholder" class="uk-text-placeholder uk-position-center uk-text-lead uk-text-middle">
+                    Waiting for your text...
+                </div>
+                <div style="display: none;" id="loading" class="uk-position-center" uk-spinner="ratio: 7"></div>
+                <div style="display: none;" id="result"></div>
+            </div>
+        </div>
+    </div>
+    <script 
+        src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.27.2/axios.min.js" 
+        integrity="sha512-odNmoc1XJy5x1TMVMdC7EMs3IVdItLPlCeL5vSUPN2llYKMJ2eByTTAIiiuqLg+GdNr9hF6z81p27DArRFKT7A==" 
+        crossorigin="anonymous" 
+        referrerpolicy="no-referrer"
+    ></script>
+    <script>
+        var dropArea = document.getElementById('drop-area');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false)
+        });
+
+        function preventDefaults (e) {
+            e.preventDefault()
+            e.stopPropagation()
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false)
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false)
+        })
+
+        function highlight(e) {
+            dropArea.classList.add('highlight')
+        }
+
+        function unhighlight(e) {
+            dropArea.classList.remove('highlight')
+        }
+
+        dropArea.addEventListener('drop', handleDrop, false)
+
+        function handleDrop(e) {
+            let dt = e.dataTransfer
+            let files = dt.files
+
+            handleFiles(files)
+        }
+
+        function handleFiles(files) {
+            ([...files]).forEach(uploadFile)
+        }
+
+        function uploadFile(file) {
+            var formData = new FormData();
+            formData.append("text", file);
+            axios.post('/handle_file', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            })
+            .then(response => {
+                document.getElementById('input').value = response.data.result;
+            })
+        }
+
+        function analyzeText() {
+            var text = document.getElementById('input').value;
+
+            document.getElementById('placeholder').style.display = 'none';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('loading').style.display = 'inline';
+
+            axios.post('/handle_analysis', {
+                'text': text
+            })
+            .then(response => {
+                var data = response.data;
+
+                document.getElementById('loading').style.display = 'none';
+                
+                document.getElementById('result').innerHTML = '';
+                document.getElementById('result').style.display = 'inline';
+
+                document.getElementById('result').innerHTML = `<p><b>Text Sentiment:</b> ${data.sentiment}<br>\
+                    <b>Text Magnitude (Emotional or Neutral):</b> ${data.magnitude}</p>`;
+
+                for (let i = 0; i < data.entities.length; ++i) {
+                    var metadata = '';
+                    for (let j = 0; j < data.entities[i].metadata.length; ++j) {
+                        metadata += `<a href="${data.entities[i].metadata[j].value}">\
+                            <b>${data.entities[i].metadata[j].name}</b>\
+                            </a><br>`;
+                    }
+                    document.getElementById('result').innerHTML += `<p>\
+                        <b>Entity name:</b> ${data.entities[i].name}<br>\
+                        <b>Entity type:</b> ${data.entities[i].type}<br>\
+                        <b>Entity salience:</b> ${data.entities[i].salience}<br>\
+                        ${metadata}\
+                        </p>`
+                }
+            })
+        }
+
+    </script>
+</body>
+</html>
